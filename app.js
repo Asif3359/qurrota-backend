@@ -4,6 +4,7 @@ var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 const bcrypt = require('bcryptjs');
+const cors = require('cors');
 require('dotenv').config();
 var connectDB = require('./config/database')
 
@@ -25,6 +26,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// CORS for frontend on localhost:3001
+app.use(cors({
+  origin: 'http://localhost:3001',
+  credentials: true,
+}));
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
