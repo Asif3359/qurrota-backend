@@ -1,0 +1,115 @@
+const Product = require("../models/Product");
+const { uploadImage } = require("../config/cloudinary");
+
+exports.createProduct = async (req, res) => {
+  try {
+    // Parse JSON fields if sent as strings in multipart form
+    const body = req.body || {};
+    let variants = body.variants;
+    if (typeof variants === 'string') {
+      try { variants = JSON.parse(variants); } catch (_) { variants = undefined; }
+    }
+    let images = body.images;
+    if (typeof images === 'string') {
+      try { images = JSON.parse(images); } catch (_) { images = undefined; }
+    }
+
+    const data = { ...body };
+    if (variants !== undefined) data.variants = variants;
+    if (images !== undefined) data.images = images;
+
+    // If files are uploaded, push them to product images
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      const uploads = await Promise.all(
+        req.files.map((f) => uploadImage(f.buffer, 'qurrota/products'))
+      );
+      const uploadedImages = uploads
+        .filter((u) => u && u.success)
+        .map((u, idx) => ({ url: u.url, publicId: u.publicId, isPrimary: idx === 0 }));
+      if (uploadedImages.length) {
+        if (!Array.isArray(data.images)) data.images = [];
+        data.images = [...uploadedImages, ...data.images];
+      }
+    }
+
+    const product = new Product(data);
+    await product.save();
+    return res.status(201).json({ message: "Product created", product });
+  } catch (err) {
+    if (err && err.code === 11000) {
+      return res.status(409).json({ message: "Duplicate key", details: err.keyValue });
+    }
+    return res.status(400).json({ message: err.message });
+  }
+};
+
+exports.listProducts = async (req, res) => {
+  try {
+    const { q, brand, category, minPrice, maxPrice, page = 1, limit = 20 } = req.query;
+    const filter = { isActive: true, isPublished: true };
+    if (q) filter.$text = { $search: q };
+    if (brand) filter.brand = brand;
+    if (category) filter.categories = category;
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
+    const skip = (Number(page) - 1) * Number(limit);
+    const [items, total] = await Promise.all([
+      Product.find(filter)
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Product.countDocuments(filter),
+    ]);
+    return res.json({ items, total, page: Number(page), limit: Number(limit) });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+exports.getProductByIdOrSlug = async (req, res) => {
+  try {
+    const { idOrSlug } = req.params;
+    const query = /^[0-9a-fA-F]{24}$/.test(idOrSlug)
+      ? { _id: idOrSlug }
+      : { slug: idOrSlug };
+    const product = await Product.findOne({ ...query, isActive: true, isPublished: true }).lean();
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    return res.json(product);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+exports.updateProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body || {};
+    const updated = await Product.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true,
+      context: 'query',
+    });
+    if (!updated) return res.status(404).json({ message: "Product not found" });
+    return res.json({ message: "Product updated", product: updated });
+  } catch (err) {
+    if (err && err.code === 11000) {
+      return res.status(409).json({ message: "Duplicate key", details: err.keyValue });
+    }
+    return res.status(400).json({ message: err.message });
+  }
+};
+
+exports.deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Product.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ message: "Product not found" });
+    return res.json({ message: "Product deleted" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};

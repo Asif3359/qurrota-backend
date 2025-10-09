@@ -16,3 +16,105 @@ curl -X POST http://localhost:3000/api/auth/forgot-password -H 'Content-Type: ap
 
 # reset password (use code from email)
 curl -X POST http://localhost:3000/api/auth/reset-password -H 'Content-Type: application/json' -d '{"email":"asifahammednishst@gmail.com","code":"637688","newPassword":"12345678"}'
+
+# Profile
+
+# get profile
+curl -X GET http://localhost:3000/api/profile \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN'
+
+# update profile (any fields optional)
+curl -X PUT http://localhost:3000/api/profile \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN' \
+  -d '{
+    "name": "Updated Name",
+    "dateOfBirth": "1995-05-10",
+    "phoneNumber": "+1234567890",
+    "bio": "Short bio here",
+    "preferences": { "theme": "dark" },
+    "currentPassword": "123456",
+    "newPassword": "12345678"
+  }'
+
+# update profile image (file upload; field name must be `image`)
+curl -X PUT http://localhost:3000/api/profile/image \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN' \
+  -F 'image=@/absolute/path/to/your-image.jpg'
+
+# update profile image via URL
+curl -X PUT http://localhost:3000/api/profile/image-url \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN' \
+  -d '{"image": "https://example.com/path/to/image.jpg"}'
+
+# delete account (requires current password)
+curl -X DELETE http://localhost:3000/api/profile \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_JWT_TOKEN' \
+  -d '{"password": "12345678"}'
+
+
+# Products
+
+# list products (public; supports q, brand, category, minPrice, maxPrice, page, limit)
+curl -X GET 'http://localhost:3000/api/products?q=shirt&brand=Acme&page=1&limit=12'
+
+# get product by id or slug (public)
+curl -X GET http://localhost:3000/api/products/some-product-slug
+curl -X GET http://localhost:3000/api/products/66f1c4c0d6b3a9b2f1a2c3d4
+
+# create product (admin only)
+curl -X POST http://localhost:3000/api/products \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN' \
+  -d '{
+    "name": "Basic T-Shirt",
+    "slug": "basic-t-shirt",            
+    "description": "Soft cotton tee",
+    "price": 19.99,
+    "compareAtPrice": 24.99,
+    "currency": "USD",
+    "brand": "Acme",
+    "categories": ["apparel", "tops"],
+    "tags": ["tshirt", "cotton"],
+    "isPublished": true,
+    "images": [{ "url": "https://example.com/image.jpg", "alt": "Front view", "isPrimary": true }],
+    "variants": [
+      { 
+        "name": "Red / M", 
+        "sku": "TS-RED-M", 
+        "price": 19.99, 
+        "stock": 10, 
+        "attributes": { "color": "Red", "size": "M" },
+        "images": [
+          { "url": "https://example.com/red-m-front.jpg", "alt": "Red M Front", "isPrimary": true },
+          { "url": "https://example.com/red-m-back.jpg", "alt": "Red M Back" }
+        ]
+      },
+      { 
+        "name": "Red / L", 
+        "sku": "TS-RED-L", 
+        "price": 19.99, 
+        "stock": 8,  
+        "attributes": { "color": "Red", "size": "L" },
+        "images": [
+          { "url": "https://example.com/red-l-front.jpg", "alt": "Red L Front", "isPrimary": true }
+        ]
+      }
+    ]
+  }'
+
+# update product (admin only)
+curl -X PUT http://localhost:3000/api/products/66f1c4c0d6b3a9b2f1a2c3d4 \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN' \
+  -d '{
+    "name": "Basic T-Shirt Updated",
+    "price": 17.99,
+    "isPublished": true
+  }'
+
+# delete product (admin only)
+curl -X DELETE http://localhost:3000/api/products/66f1c4c0d6b3a9b2f1a2c3d4 \
+  -H 'Authorization: Bearer YOUR_ADMIN_JWT_TOKEN'
