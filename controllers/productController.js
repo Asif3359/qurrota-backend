@@ -70,6 +70,71 @@ exports.listProducts = async (req, res) => {
   }
 };
 
+exports.getProducts = async (req, res) => {
+  try {
+    console.log('🔍 getProducts function called for /published route');
+    console.log('📝 Query parameters:', req.query);
+    
+    const filter = { isPublished: true };
+    console.log('🎯 Database filter:', filter);
+
+    // Check what's actually in the database
+    const totalPublished = await Product.countDocuments(filter);
+    console.log(`📊 Total published products in DB: ${totalPublished}`);
+
+    const [products, total] = await Promise.all([
+      Product.find(filter)
+        .sort({ updatedAt: -1 })
+        .limit(10)
+        .lean(),
+      Product.countDocuments(filter)
+    ]);
+
+    console.log(`✅ Found ${products.length} products`);
+
+    // Always return success even if empty
+    return res.status(200).json({
+      success: true,
+      data: products,
+      count: products.length,
+      total: total,
+      message: products.length === 0 ? 'No published products found' : 'Products retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error in getProducts:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching products',
+      error: error.message
+    });
+  }
+};
+
+// Add this to your productController
+exports.debugProducts = async (req, res) => {
+  try {
+    const totalProducts = await Product.countDocuments({});
+    const publishedProducts = await Product.countDocuments({ isPublished: true });
+    const activeProducts = await Product.countDocuments({ isActive: true });
+    const activeAndPublished = await Product.countDocuments({ isActive: true, isPublished: true });
+    
+    const sampleProducts = await Product.find({}).limit(2).select('name isActive isPublished');
+    
+    res.json({
+      databaseStats: {
+        totalProducts,
+        publishedProducts,
+        activeProducts,
+        activeAndPublished
+      },
+      sampleProducts
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getProductByIdOrSlug = async (req, res) => {
   try {
     const { idOrSlug } = req.params;
