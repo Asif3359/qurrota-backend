@@ -80,6 +80,7 @@ const signup = async (req, res) => {
     res.status(201).json({
       message: "User registered successfully. Verification code sent to email.",
       user: {
+        id: user._id,
         name: user.name,
         email: user.email,
         image: user.image,
@@ -155,6 +156,7 @@ const login = async (req, res) => {
       message: "Login successfully",
       token,
       user: {
+        id: user._id,
         name: user.name,
         email: user.email,
         image: user.image,
