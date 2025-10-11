@@ -7,98 +7,82 @@ const nodemailer = require("nodemailer");
 
 dotenv.config();
 
-const createMailTransporter = () => {
-  return nodemailer.createTransport({
-    service: "gmail",
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    connectionTimeout: 10000, // Increased timeout
-    greetingTimeout: 5000,
-    socketTimeout: 10000,
-    tls: {
-      rejectUnauthorized: true, // Changed to true for security
-      ciphers: 'SSLv3'
-    }
-  });
-};
+// ✅ Simple Gmail transporter using App Password
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS, // App password from your Google account
+  },
+});
 
-const mailTransporter = createMailTransporter();
-
+// ✅ Send Email helper
 const sendEmail = async ({ to, subject, html }) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn("Email credentials are not set; skipping email send.");
+    console.warn("⚠️ Email credentials are not set; skipping email send.");
     return;
   }
-  
+
   try {
-    await mailTransporter.sendMail({
-      from: `Qurrota <${process.env.EMAIL_USER}>`,
+    await transporter.sendMail({
+      from: `"Qurrota" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       html,
     });
-    console.log(`Email sent successfully to ${to}`);
+    console.log(`✅ Email sent successfully to ${to}`);
   } catch (error) {
-    console.error("Failed to send email:", error.message);
-    // Don't throw error - just log it and continue
-    // User registration will still work
+    console.error("❌ Failed to send email:", error.message);
   }
 };
 
-const generateCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+// ✅ Generate 6-digit code
+const generateCode = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
 
-/**
- * Handles user registration.
- * @param {object} req - The request object.
- * @param {object} res - The response object.
- */
+// ✅ Signup controller
 const signup = async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
+    // Check for existing user
     let user = await User.findOne({ email });
-
     if (user) {
       return res.status(409).json({
         message: "User with this email already exists",
       });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Generate verification code
     const verificationCode = generateCode();
 
+    // Create new user
     user = new User({
       name,
       email,
       password: hashedPassword,
       emailVerificationToken: verificationCode,
-      emailVerificationExpires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      emailVerificationExpires: new Date(Date.now() + 15 * 60 * 1000), // 15 mins
     });
 
     await user.save();
 
-    try {
-      await sendEmail({
-        to: email,
-        subject: "Verify your Qurrota account",
-        html: `
-          <p>Hi ${name},</p>
-          <p>Your verification code is:</p>
-          <h2 style="letter-spacing:3px;">${verificationCode}</h2>
-          <p>This code expires in 15 minutes.</p>
-        `,
-      });
-    } catch (emailErr) {
-      console.error("Failed to send verification email:", emailErr);
-    }
+    // Send verification email
+    await sendEmail({
+      to: email,
+      subject: "Verify your Qurrota account",
+      html: `
+        <p>Hi ${name},</p>
+        <p>Your verification code is:</p>
+        <h2 style="letter-spacing:3px;">${verificationCode}</h2>
+        <p>This code expires in 15 minutes.</p>
+      `,
+    });
 
+    // Response
     res.status(201).json({
       message: "User registered successfully. Verification code sent to email.",
       user: {
@@ -116,7 +100,7 @@ const signup = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Server error during registration :", error);
+    console.error("Server error during registration:", error);
     res.status(500).json({
       message: "Server error during registration",
     });
