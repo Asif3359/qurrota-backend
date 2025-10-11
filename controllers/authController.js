@@ -11,57 +11,69 @@ dotenv.config();
 const createTransporter = () => {
   // Check if email credentials are available
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn("⚠️ Gmail credentials are not set");
+    console.error("❌ Gmail credentials are missing:");
+    console.error("   EMAIL_USER:", process.env.EMAIL_USER ? "Set" : "Not set");
+    console.error("   EMAIL_PASS:", process.env.EMAIL_PASS ? "Set" : "Not set");
+    console.error("   Please set EMAIL_USER and EMAIL_PASS in Render environment variables");
     return null;
   }
 
-  console.log('📧 Initializing email transporter...');
+  console.log('📧 Initializing email transporter with:', process.env.EMAIL_USER);
   
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    tls: {
-      rejectUnauthorized: false // Important for cloud environments
-    },
-    connectionTimeout: 60000,
-    socketTimeout: 60000,
-    greetingTimeout: 30000,
-    debug: process.env.NODE_ENV !== 'production',
-  });
+  try {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false // Crucial for Render
+      },
+      connectionTimeout: 60000,
+      socketTimeout: 60000,
+      debug: true, // Enable debug logs
+      logger: true
+    });
 
-  return transporter;
+    return transporter;
+  } catch (error) {
+    console.error('❌ Failed to create transporter:', error.message);
+    return null;
+  }
 };
 
-// Create transporter instance
+// Initialize transporter
 let transporter = createTransporter();
 
 // ✅ Verify transporter on startup
 const verifyTransporter = async () => {
   if (!transporter) {
-    console.warn('❌ Email transporter not initialized - check EMAIL_USER and EMAIL_PASS environment variables');
+    console.error('❌ Email transporter not available');
     return false;
   }
 
   try {
+    console.log('🔧 Verifying SMTP connection...');
     await transporter.verify();
     console.log('✅ SMTP connection verified successfully');
     return true;
   } catch (error) {
     console.error('❌ SMTP connection failed:', error.message);
     
-    // Specific error handling
+    // Detailed error analysis
     if (error.code === 'EAUTH') {
-      console.error('🔐 Authentication failed - please check:');
-      console.error('1. Ensure you\'re using an App Password (not your regular Gmail password)');
-      console.error('2. Enable 2-Factor Authentication in your Google Account');
-      console.error('3. Generate App Password at: https://myaccount.google.com/apppasswords');
+      console.error('🔐 AUTHENTICATION FAILED - Please check:');
+      console.error('   1. Are you using an App Password (not your regular Gmail password)?');
+      console.error('   2. Is 2-Factor Authentication enabled on your Google account?');
+      console.error('   3. Generate App Password at: https://myaccount.google.com/apppasswords');
+      console.error('   4. Make sure EMAIL_PASS is the 16-character app password');
     } else if (error.code === 'ECONNECTION') {
-      console.error('🌐 Connection failed - check network/firewall settings');
+      console.error('🌐 CONNECTION FAILED - Check network/firewall settings');
+    } else {
+      console.error('💥 Unexpected error:', error);
     }
     
     transporter = null;
@@ -69,7 +81,7 @@ const verifyTransporter = async () => {
   }
 };
 
-// Verify on startup
+// Verify transporter when application starts
 verifyTransporter();
 
 // ✅ Enhanced Send Email helper
