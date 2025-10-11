@@ -9,10 +9,19 @@ dotenv.config();
 
 const mailTransporter = nodemailer.createTransport({
   service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 5000,
+  socketTimeout: 10000,
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
 const sendEmail = async ({ to, subject, html }) => {
@@ -20,12 +29,35 @@ const sendEmail = async ({ to, subject, html }) => {
     console.warn("Email credentials are not set; skipping email send.");
     return;
   }
-  await mailTransporter.sendMail({
-    from: `Qurrota <${process.env.EMAIL_USER}>`,
-    to,
-    subject,
-    html,
-  });
+  
+  // Try to send email with retry logic for Render
+  let attempts = 0;
+  const maxAttempts = 2;
+  
+  while (attempts < maxAttempts) {
+    try {
+      await mailTransporter.sendMail({
+        from: `Qurrota <${process.env.EMAIL_USER}>`,
+        to,
+        subject,
+        html,
+      });
+      console.log(`Email sent successfully to ${to}`);
+      return;
+    } catch (error) {
+      attempts++;
+      console.error(`Email send attempt ${attempts} failed:`, error.message);
+      
+      if (attempts >= maxAttempts) {
+        console.error("Failed to send email after all attempts");
+        // Don't throw error - just log it and continue
+        return;
+      }
+      
+      // Wait 2 seconds before retry
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
 };
 
 const generateCode = () => Math.floor(100000 + Math.random() * 900000).toString();
