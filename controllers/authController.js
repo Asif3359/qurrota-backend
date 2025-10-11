@@ -7,80 +7,24 @@ const nodemailer = require("nodemailer");
 
 dotenv.config();
 
-// Create email transporter based on service type
 const createMailTransporter = () => {
-  if (process.env.EMAIL_SERVICE === 'sendgrid') {
-    // SendGrid configuration (100 emails/day free)
-    return nodemailer.createTransport({
-      host: "smtp.sendgrid.net",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER, // Should be "apikey"
-        pass: process.env.EMAIL_PASS, // Your SendGrid API key
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
-    });
-  } else if (process.env.EMAIL_SERVICE === 'mailgun') {
-    // Mailgun configuration (10,000 emails/month free)
-    return nodemailer.createTransport({
-      host: "smtp.mailgun.org",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER, // Your Mailgun SMTP username
-        pass: process.env.EMAIL_PASS, // Your Mailgun SMTP password
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
-    });
-  } else if (process.env.EMAIL_SERVICE === 'outlook') {
-    // Outlook/Hotmail configuration (free)
-    return nodemailer.createTransport({
-      service: "hotmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
-    });
-  } else if (process.env.EMAIL_SERVICE === 'yahoo') {
-    // Yahoo configuration (free)
-    return nodemailer.createTransport({
-      service: "yahoo",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
-    });
-  } else {
-    // Default Gmail configuration
-    return nodemailer.createTransport({
-      service: "gmail",
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      connectionTimeout: 5000,
-      greetingTimeout: 3000,
-      socketTimeout: 5000,
-      tls: {
-        rejectUnauthorized: false,
-        ciphers: 'TLSv1.2'
-      }
-    });
-  }
+  return nodemailer.createTransport({
+    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    connectionTimeout: 10000, // Increased timeout
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
+    tls: {
+      rejectUnauthorized: true, // Changed to true for security
+      ciphers: 'SSLv3'
+    }
+  });
 };
 
 const mailTransporter = createMailTransporter();
