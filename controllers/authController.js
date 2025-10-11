@@ -7,95 +7,25 @@ const nodemailer = require("nodemailer");
 
 dotenv.config();
 
-// Create email transporter with fallback options
-const createMailTransporter = () => {
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  const config = {
-    service: "gmail",
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    // Production-optimized timeouts
-    connectionTimeout: isProduction ? 30000 : 60000, // 30s in production, 60s in dev
-    greetingTimeout: isProduction ? 15000 : 30000, // 15s in production, 30s in dev
-    socketTimeout: isProduction ? 30000 : 60000, // 30s in production, 60s in dev
-    tls: {
-      rejectUnauthorized: false,
-      ciphers: 'SSLv3'
-    },
-    // Additional production settings
-    pool: isProduction, // Use connection pooling in production
-    maxConnections: isProduction ? 5 : 1,
-    maxMessages: isProduction ? 100 : 1,
-    rateDelta: isProduction ? 20000 : 1000, // 20s between batches in production
-    rateLimit: isProduction ? 5 : 1 // 5 emails per batch in production
-  };
-
-  return nodemailer.createTransport(config);
-};
-
-const mailTransporter = createMailTransporter();
-
-// Verify SMTP connection
-const verifySMTPConnection = async () => {
-  try {
-    await mailTransporter.verify();
-    console.log('SMTP connection verified successfully');
-    return true;
-  } catch (error) {
-    console.error('SMTP connection verification failed:', error);
-    return false;
-  }
-};
+const mailTransporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 const sendEmail = async ({ to, subject, html }) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.warn("Email credentials are not set; skipping email send.");
     return;
   }
-  
-  // Verify connection first (but don't fail silently in production)
-  const isConnected = await verifySMTPConnection();
-  if (!isConnected) {
-    console.error('SMTP connection failed, skipping email send');
-    // In production, you might want to queue the email for later retry
-    // For now, we'll continue with the retry logic below
-    console.log('Attempting to send email despite connection verification failure...');
-  }
-  
-  const maxRetries = 3;
-  let retryCount = 0;
-  
-  while (retryCount < maxRetries) {
-    try {
-      await mailTransporter.sendMail({
-        from: `Qurrota <${process.env.EMAIL_USER}>`,
-        to,
-        subject,
-        html,
-      });
-      console.log(`Email sent successfully to ${to}`);
-      return; // Success, exit the function
-    } catch (error) {
-      retryCount++;
-      console.error(`Email send attempt ${retryCount} failed:`, error.message);
-      
-      if (retryCount >= maxRetries) {
-        console.error(`Failed to send email after ${maxRetries} attempts:`, error);
-        throw error; // Re-throw the error after all retries failed
-      }
-      
-      // Wait before retrying (exponential backoff)
-      const delay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
-      console.log(`Retrying in ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
+  await mailTransporter.sendMail({
+    from: `Qurrota <${process.env.EMAIL_USER}>`,
+    to,
+    subject,
+    html,
+  });
 };
 
 const generateCode = () => Math.floor(100000 + Math.random() * 900000).toString();
