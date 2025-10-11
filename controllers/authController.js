@@ -3,191 +3,99 @@ const User = require("../models/Users");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
 dotenv.config();
 
-// ✅ Enhanced Email transporter configuration for Render
-// const createTransporter = () => {
-//   // Check if email credentials are available
-//   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-//     console.error("❌ Gmail credentials are missing:");
-//     console.error("   EMAIL_USER:", process.env.EMAIL_USER ? "Set" : "Not set");
-//     console.error("   EMAIL_PASS:", process.env.EMAIL_PASS ? "Set" : "Not set");
-//     console.error("   Please set EMAIL_USER and EMAIL_PASS in Render environment variables");
-//     return null;
-//   }
-
-//   console.log('📧 Initializing email transporter with:', process.env.EMAIL_USER);
-  
-//   try {
-//     const transporter = nodemailer.createTransport({
-//       host: 'smtp.gmail.com',
-//       port: 587,
-//       secure: false,
-//       auth: {
-//         user: process.env.EMAIL_USER,
-//         pass: process.env.EMAIL_PASS,
-//       },
-//       tls: {
-//         rejectUnauthorized: false // Crucial for Render
-//       },
-//       connectionTimeout: 60000,
-//       socketTimeout: 60000,
-//       debug: true, // Enable debug logs
-//       logger: true
-//     });
-
-//     return transporter;
-//   } catch (error) {
-//     console.error('❌ Failed to create transporter:', error.message);
-//     return null;
-//   }
-// };
-
-// ✅ Alternative SMTP Configuration for Render
-const createTransporter = () => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error("❌ Email credentials missing");
+// ✅ Production Email Configuration with Resend
+const initializeResend = () => {
+  // Check if Resend API key is available
+  if (!process.env.RESEND_API_KEY) {
+    console.error("❌ Resend API key is missing:");
+    console.error(
+      "   RESEND_API_KEY:",
+      process.env.RESEND_API_KEY ? "Set" : "Not set"
+    );
+    console.error("   Please set RESEND_API_KEY in your environment variables");
     return null;
   }
 
-  console.log('📧 Attempting to connect to Gmail SMTP...');
-
-  // Try different configurations
-  const configs = [
-    {
-      // Configuration 1: Standard with TLS
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    },
-    {
-      // Configuration 2: SSL
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    },
-    {
-      // Configuration 3: Simple without TLS requirements
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false
-      },
-      ignoreTLS: false,
-      requireTLS: true
-    }
-  ];
-
-  // Try each configuration until one works
-  for (let config of configs) {
-    try {
-      const transporter = nodemailer.createTransport(config);
-      console.log(`🔄 Trying configuration: ${config.port} ${config.secure ? 'SSL' : 'TLS'}`);
-      return transporter;
-    } catch (error) {
-      console.log(`❌ Configuration failed: ${error.message}`);
-    }
-  }
-
-  console.error('❌ All SMTP configurations failed');
-  return null;
-};
-
-// Initialize transporter
-let transporter = createTransporter();
-
-// ✅ Verify transporter on startup
-const verifyTransporter = async () => {
-  if (!transporter) {
-    console.error('❌ Email transporter not available');
-    return false;
-  }
+  console.log("📧 Initializing Resend email service...");
 
   try {
-    console.log('🔧 Verifying SMTP connection...');
-    await transporter.verify();
-    console.log('✅ SMTP connection verified successfully');
-    return true;
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    console.log("✅ Resend initialized successfully");
+    return resend;
   } catch (error) {
-    console.error('❌ SMTP connection failed:', error.message);
-    
-    // Detailed error analysis
-    if (error.code === 'EAUTH') {
-      console.error('🔐 AUTHENTICATION FAILED - Please check:');
-      console.error('   1. Are you using an App Password (not your regular Gmail password)?');
-      console.error('   2. Is 2-Factor Authentication enabled on your Google account?');
-      console.error('   3. Generate App Password at: https://myaccount.google.com/apppasswords');
-      console.error('   4. Make sure EMAIL_PASS is the 16-character app password');
-    } else if (error.code === 'ECONNECTION') {
-      console.error('🌐 CONNECTION FAILED - Check network/firewall settings');
-    } else {
-      console.error('💥 Unexpected error:', error);
-    }
-    
-    transporter = null;
-    return false;
+    console.error("❌ Failed to initialize Resend:", error.message);
+    return null;
   }
 };
 
-// Verify transporter when application starts
-verifyTransporter();
+// Initialize Resend
+const resend = initializeResend();
 
-// ✅ Enhanced Send Email helper
+// ✅ Production Send Email helper using Resend
 const sendEmail = async ({ to, subject, html }) => {
-  // Check if email service is available
-  if (!transporter) {
-    console.warn("⚠️ Email service unavailable - skipping email send");
-    return { success: false, error: 'Email service not configured' };
+  // Check if Resend service is available
+  if (!resend) {
+    console.warn("⚠️ Resend service unavailable - skipping email send");
+    return { success: false, error: "Resend service not configured" };
   }
 
   try {
-    const mailOptions = {
-      from: `"Qurrota" <${process.env.EMAIL_USER}>`,
-      to,
+    console.log(`📤 Attempting to send email to: ${to}`);
+
+    // Production: Send to actual recipient
+    // Development: Send to verified email for testing
+    const isProduction = process.env.NODE_ENV === "production";
+    const actualTo = isProduction ? to : 'asifahammednishst@gmail.com'; // Send to verified email in development
+
+    console.log(`🔍 Debug Info:`);
+    console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
+    console.log(`   isProduction: ${isProduction}`);
+    console.log(`   Original recipient: ${to}`);
+    console.log(`   Actual recipient: ${actualTo}`);
+
+    if (!isProduction) {
+      console.log(
+        `🧪 Development mode: Redirecting email from ${to} to ${actualTo}`
+      );
+    }
+
+    // Use environment-based email configuration
+    const fromEmail = "Qurrota <onboarding@resend.dev>";
+
+    const result = await resend.emails.send({
+      from: fromEmail,
+      to: [actualTo],
       subject,
       html,
-    };
+    });
 
-    console.log(`📤 Attempting to send email to: ${to}`);
-    
-    const result = await transporter.sendMail(mailOptions);
-    console.log(`✅ Email sent successfully to ${to}, Message ID: ${result.messageId}`);
-    
-    return { success: true, messageId: result.messageId };
+    console.log(
+      `✅ Email sent successfully to ${actualTo}, Message ID: ${result.data?.id}`
+    );
+
+    return { success: true, messageId: result.data?.id };
   } catch (error) {
     console.error("❌ Failed to send email:", error.message);
-    
-    // Specific error handling
-    if (error.code === 'EAUTH') {
-      console.error('🔐 Authentication error - check Gmail App Password');
-    } else if (error.code === 'EMESSAGE') {
-      console.error('📧 Message rejected by server');
-    } else if (error.code === 'ECONNECTION') {
-      console.error('🌐 Connection error - check network settings');
+
+    // Specific error handling for Resend
+    if (error.message?.includes("Invalid API key")) {
+      console.error("🔐 Invalid Resend API key - check your RESEND_API_KEY");
+    } else if (error.message?.includes("Invalid email")) {
+      console.error("📧 Invalid email address format");
+    } else if (error.message?.includes("Rate limit")) {
+      console.error(
+        "⏱️ Rate limit exceeded - please wait before sending more emails"
+      );
+    } else if (error.message?.includes("You can only send testing emails")) {
+      console.error(
+        "🧪 Testing mode: Only verified emails allowed. Set NODE_ENV=production for full access"
+      );
     }
-    
+
     return { success: false, error: error.message };
   }
 };
@@ -241,7 +149,8 @@ const signup = async (req, res) => {
     // Response
     if (emailResult.success) {
       res.status(201).json({
-        message: "User registered successfully. Verification code sent to email.",
+        message:
+          "User registered successfully. Verification code sent to email.",
         user: {
           id: user._id,
           name: user.name,
@@ -259,7 +168,8 @@ const signup = async (req, res) => {
     } else {
       // User created but email failed
       res.status(201).json({
-        message: "User registered successfully. But failed to send verification email. Please use resend verification.",
+        message:
+          "User registered successfully. But failed to send verification email. Please use resend verification.",
         user: {
           id: user._id,
           name: user.name,
@@ -273,7 +183,7 @@ const signup = async (req, res) => {
           bio: user.bio,
           preferences: user.preferences,
         },
-        warning: "Verification email failed to send"
+        warning: "Verification email failed to send",
       });
     }
   } catch (error) {
@@ -375,7 +285,9 @@ const verifyEmail = async (req, res) => {
       user.emailVerificationToken !== code ||
       user.emailVerificationExpires < new Date()
     ) {
-      return res.status(400).json({ message: "Invalid or expired verification code" });
+      return res
+        .status(400)
+        .json({ message: "Invalid or expired verification code" });
     }
     user.isVerified = true;
     user.emailVerificationToken = undefined;
@@ -393,13 +305,14 @@ const resendVerification = async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.isVerified) return res.status(200).json({ message: "Email already verified" });
-    
+    if (user.isVerified)
+      return res.status(200).json({ message: "Email already verified" });
+
     const verificationCode = generateCode();
     user.emailVerificationToken = verificationCode;
     user.emailVerificationExpires = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
-    
+
     const emailResult = await sendEmail({
       to: email,
       subject: "Your Qurrota verification code",
@@ -414,14 +327,16 @@ const resendVerification = async (req, res) => {
     if (emailResult.success) {
       return res.json({ message: "Verification code resent" });
     } else {
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Verification code generated but failed to send email",
-        error: emailResult.error 
+        error: emailResult.error,
       });
     }
   } catch (error) {
     console.error("Error resending verification:", error);
-    return res.status(500).json({ message: "Server error resending verification" });
+    return res
+      .status(500)
+      .json({ message: "Server error resending verification" });
   }
 };
 
@@ -431,14 +346,16 @@ const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       // Do not reveal existence
-      return res.json({ message: "If an account exists, a reset code has been sent" });
+      return res.json({
+        message: "If an account exists, a reset code has been sent",
+      });
     }
-    
+
     const resetCode = generateCode();
     user.passwordResetToken = resetCode;
     user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
-    
+
     const emailResult = await sendEmail({
       to: email,
       subject: "Reset your Qurrota password",
@@ -453,11 +370,15 @@ const forgotPassword = async (req, res) => {
     if (!emailResult.success) {
       console.error("Failed to send reset email:", emailResult.error);
     }
-    
-    return res.json({ message: "If an account exists, a reset code has been sent" });
+
+    return res.json({
+      message: "If an account exists, a reset code has been sent",
+    });
   } catch (error) {
     console.error("Error initiating password reset:", error);
-    return res.status(500).json({ message: "Server error initiating password reset" });
+    return res
+      .status(500)
+      .json({ message: "Server error initiating password reset" });
   }
 };
 
@@ -474,13 +395,13 @@ const resetPassword = async (req, res) => {
     ) {
       return res.status(400).json({ message: "Invalid or expired reset code" });
     }
-    
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
     await user.save();
-    
+
     return res.json({ message: "Password reset successful" });
   } catch (error) {
     console.error("Error resetting password:", error);
