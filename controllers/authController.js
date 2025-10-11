@@ -9,62 +9,34 @@ dotenv.config();
 
 // ✅ Email transporter configuration with support for multiple providers
 const createTransporter = () => {
-  const emailService = process.env.EMAIL_SERVICE || 'gmail';
+  const emailService = process.env.EMAIL_SERVICE;
   
-  if (emailService === 'maileroo') {
-    return nodemailer.createTransport({
-      host: 'smtp.maileroo.com',
-      port: 587,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.MAILEROO_USER,
-        pass: process.env.MAILEROO_PASS,
-      },
-    });
-  } else if (emailService === 'gmail') {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS, // App password from your Google account
-      },
-    });
-  } else {
-    // Fallback to Gmail if no service specified
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-  }
+  return nodemailer.createTransport({
+    host: 'smtp.maileroo.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.MAILEROO_USER,
+      pass: process.env.MAILEROO_PASS,
+    },
+  });
 };
 
 const transporter = createTransporter();
 
 // ✅ Send Email helper
 const sendEmail = async ({ to, subject, html }) => {
-  const emailService = process.env.EMAIL_SERVICE || 'gmail';
+  const emailService = process.env.EMAIL_SERVICE ;
   
-  // Check credentials based on the email service
-  if (emailService === 'maileroo') {
-    if (!process.env.MAILEROO_USER || !process.env.MAILEROO_PASS) {
-      console.warn("⚠️ Maileroo credentials are not set; skipping email send.");
-      return;
-    }
-  } else {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.warn("⚠️ Email credentials are not set; skipping email send.");
-      return;
-    }
+  if (!process.env.MAILEROO_USER || !process.env.MAILEROO_PASS) {
+    console.warn("⚠️ Maileroo credentials are not set; skipping email send.");
+    return;
   }
 
   try {
     // Use appropriate sender email based on service
-    const senderEmail = emailService === 'maileroo' 
-      ? process.env.MAILEROO_USER 
-      : process.env.EMAIL_USER;
+    const senderEmail = process.env.MAILEROO_USER ;
+      
       
     await transporter.sendMail({
       from: `"Qurrota" <${senderEmail}>`,
