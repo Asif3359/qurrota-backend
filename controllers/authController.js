@@ -8,20 +8,83 @@ const nodemailer = require("nodemailer");
 dotenv.config();
 
 // ✅ Enhanced Email transporter configuration for Render
+// const createTransporter = () => {
+//   // Check if email credentials are available
+//   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+//     console.error("❌ Gmail credentials are missing:");
+//     console.error("   EMAIL_USER:", process.env.EMAIL_USER ? "Set" : "Not set");
+//     console.error("   EMAIL_PASS:", process.env.EMAIL_PASS ? "Set" : "Not set");
+//     console.error("   Please set EMAIL_USER and EMAIL_PASS in Render environment variables");
+//     return null;
+//   }
+
+//   console.log('📧 Initializing email transporter with:', process.env.EMAIL_USER);
+  
+//   try {
+//     const transporter = nodemailer.createTransport({
+//       host: 'smtp.gmail.com',
+//       port: 587,
+//       secure: false,
+//       auth: {
+//         user: process.env.EMAIL_USER,
+//         pass: process.env.EMAIL_PASS,
+//       },
+//       tls: {
+//         rejectUnauthorized: false // Crucial for Render
+//       },
+//       connectionTimeout: 60000,
+//       socketTimeout: 60000,
+//       debug: true, // Enable debug logs
+//       logger: true
+//     });
+
+//     return transporter;
+//   } catch (error) {
+//     console.error('❌ Failed to create transporter:', error.message);
+//     return null;
+//   }
+// };
+
+// ✅ Alternative SMTP Configuration for Render
 const createTransporter = () => {
-  // Check if email credentials are available
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error("❌ Gmail credentials are missing:");
-    console.error("   EMAIL_USER:", process.env.EMAIL_USER ? "Set" : "Not set");
-    console.error("   EMAIL_PASS:", process.env.EMAIL_PASS ? "Set" : "Not set");
-    console.error("   Please set EMAIL_USER and EMAIL_PASS in Render environment variables");
+    console.error("❌ Email credentials missing");
     return null;
   }
 
-  console.log('📧 Initializing email transporter with:', process.env.EMAIL_USER);
-  
-  try {
-    const transporter = nodemailer.createTransport({
+  console.log('📧 Attempting to connect to Gmail SMTP...');
+
+  // Try different configurations
+  const configs = [
+    {
+      // Configuration 1: Standard with TLS
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    },
+    {
+      // Configuration 2: SSL
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    },
+    {
+      // Configuration 3: Simple without TLS requirements
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
@@ -30,19 +93,26 @@ const createTransporter = () => {
         pass: process.env.EMAIL_PASS,
       },
       tls: {
-        rejectUnauthorized: false // Crucial for Render
+        rejectUnauthorized: false
       },
-      connectionTimeout: 60000,
-      socketTimeout: 60000,
-      debug: true, // Enable debug logs
-      logger: true
-    });
+      ignoreTLS: false,
+      requireTLS: true
+    }
+  ];
 
-    return transporter;
-  } catch (error) {
-    console.error('❌ Failed to create transporter:', error.message);
-    return null;
+  // Try each configuration until one works
+  for (let config of configs) {
+    try {
+      const transporter = nodemailer.createTransport(config);
+      console.log(`🔄 Trying configuration: ${config.port} ${config.secure ? 'SSL' : 'TLS'}`);
+      return transporter;
+    } catch (error) {
+      console.log(`❌ Configuration failed: ${error.message}`);
+    }
   }
+
+  console.error('❌ All SMTP configurations failed');
+  return null;
 };
 
 // Initialize transporter
