@@ -18,6 +18,7 @@ var profileRouter = require('./routes/profileRoutes');
 var productRouter = require('./routes/productRoutes');
 var wishlistRouter = require('./routes/wishlistRoutes');
 var cartRouter = require('./routes/cartRoutes');
+var orderRouter = require('./routes/orderRoutes');
 
 var app = express();
 
@@ -65,6 +66,7 @@ app.use('/api/profile',profileRouter);
 app.use('/api/products', productRouter);
 app.use('/api/wishlist', wishlistRouter);
 app.use('/api/cart', cartRouter);
+app.use('/api/orders', orderRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
