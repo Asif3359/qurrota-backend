@@ -64,7 +64,7 @@ const sendEmail = async ({ to, subject, html }) => {
     }
 
     // Use environment-based email configuration
-    const fromEmail = "Qurrota <onboarding@resend.dev>";
+    const fromEmail = process.env.EMAIL_FROM || "Qurrota <onboarding@resend.dev>";
 
     const result = await resend.emails.send({
       from: fromEmail,

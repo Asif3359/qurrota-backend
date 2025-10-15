@@ -37,6 +37,7 @@ const allowedOrigins = [
   'http://localhost:3001',
   'https://qurrota.vercel.app', // Add your Vercel frontend
   'https://www.qurrota.com',
+  'https://qurrota.com',
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
