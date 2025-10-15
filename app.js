@@ -36,6 +36,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const allowedOrigins = [
   'http://localhost:3001',
   'https://qurrota.vercel.app', // Add your Vercel frontend
+  'https://www.qurrota.com',
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
