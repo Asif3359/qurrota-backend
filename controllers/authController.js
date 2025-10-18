@@ -129,7 +129,7 @@ const signup = async (req, res) => {
       email,
       password: hashedPassword,
       emailVerificationToken: verificationCode,
-      emailVerificationExpires: new Date(Date.now() + 15 * 60 * 1000), // 15 mins
+      emailVerificationExpires: new Date(Date.now() + 5 * 60 * 1000), // 5 mins
     });
 
     await user.save();
@@ -142,7 +142,7 @@ const signup = async (req, res) => {
         <p>Hi ${name},</p>
         <p>Your verification code is:</p>
         <h2 style="letter-spacing:3px;">${verificationCode}</h2>
-        <p>This code expires in 15 minutes.</p>
+        <p>This code expires in 5 minutes.</p>
       `,
     });
 
@@ -310,7 +310,7 @@ const resendVerification = async (req, res) => {
 
     const verificationCode = generateCode();
     user.emailVerificationToken = verificationCode;
-    user.emailVerificationExpires = new Date(Date.now() + 15 * 60 * 1000);
+    user.emailVerificationExpires = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
 
     const emailResult = await sendEmail({
@@ -320,7 +320,7 @@ const resendVerification = async (req, res) => {
         <p>Hi ${user.name},</p>
         <p>Your new verification code is:</p>
         <h2 style="letter-spacing:3px;">${verificationCode}</h2>
-        <p>This code expires in 15 minutes.</p>
+        <p>This code expires in 5 minutes.</p>
       `,
     });
 
@@ -353,7 +353,7 @@ const forgotPassword = async (req, res) => {
 
     const resetCode = generateCode();
     user.passwordResetToken = resetCode;
-    user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
+    user.passwordResetExpires = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
 
     const emailResult = await sendEmail({
@@ -363,7 +363,7 @@ const forgotPassword = async (req, res) => {
         <p>Hi ${user.name},</p>
         <p>Your password reset code is:</p>
         <h2 style="letter-spacing:3px;">${resetCode}</h2>
-        <p>This code expires in 15 minutes.</p>
+        <p>This code expires in 5 minutes.</p>
       `,
     });
 
