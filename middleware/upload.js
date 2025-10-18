@@ -28,31 +28,38 @@ const upload = multer({
 const uploadSingle = upload.single('image');
 
 // Middleware for multiple images upload
-const uploadMultiple = upload.array('images', 5); // Max 5 images
+const uploadMultiple = upload.array('images', 10); // Max 10 images
 
 // Error handling middleware for multer
 const handleUploadError = (error, req, res, next) => {
+  console.error('🚨 Upload error:', error);
+  
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
-        message: 'File too large. Maximum size is 5MB.'
+        message: 'File too large. Maximum size is 5MB per file.',
+        code: 'FILE_TOO_LARGE'
       });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(400).json({
-        message: 'Too many files. Maximum is 5 files.'
+        message: 'Too many files. Maximum is 10 files per request.',
+        code: 'TOO_MANY_FILES',
+        limit: 10
       });
     }
     if (error.code === 'LIMIT_UNEXPECTED_FILE') {
       return res.status(400).json({
-        message: 'Unexpected field name for file upload.'
+        message: 'Unexpected field name for file upload. Use "images" field.',
+        code: 'UNEXPECTED_FIELD'
       });
     }
   }
   
   if (error.message === 'Only image files are allowed!') {
     return res.status(400).json({
-      message: 'Only image files are allowed!'
+      message: 'Only image files are allowed!',
+      code: 'INVALID_FILE_TYPE'
     });
   }
   

@@ -20,15 +20,41 @@ exports.createProduct = async (req, res) => {
 
     // If files are uploaded, push them to product images
     if (Array.isArray(req.files) && req.files.length > 0) {
-      const uploads = await Promise.all(
-        req.files.map((f) => uploadImage(f.buffer, 'qurrota/products'))
-      );
-      const uploadedImages = uploads
-        .filter((u) => u && u.success)
+      console.log(`📸 Processing ${req.files.length} uploaded files`);
+      
+      // Upload files with a small delay to avoid rate limits
+      const uploads = [];
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+        console.log(`📤 Uploading file ${i + 1}/${req.files.length}: ${file.originalname} (${file.size} bytes)`);
+        
+        const uploadResult = await uploadImage(file.buffer, 'qurrota/products');
+        uploads.push(uploadResult);
+        
+        // Small delay between uploads to avoid rate limits
+        if (i < req.files.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      const successfulUploads = uploads.filter((u) => u && u.success);
+      const failedUploads = uploads.filter((u) => !u || !u.success);
+      
+      if (failedUploads.length > 0) {
+        console.error('❌ Failed uploads:', failedUploads);
+        return res.status(400).json({ 
+          message: `Failed to upload ${failedUploads.length} out of ${req.files.length} images`,
+          errors: failedUploads.map(u => u.error)
+        });
+      }
+      
+      const uploadedImages = successfulUploads
         .map((u, idx) => ({ url: u.url, publicId: u.publicId, isPrimary: idx === 0 }));
+      
       if (uploadedImages.length) {
         if (!Array.isArray(data.images)) data.images = [];
         data.images = [...uploadedImages, ...data.images];
+        console.log(`✅ Successfully uploaded ${uploadedImages.length} images`);
       }
     }
 

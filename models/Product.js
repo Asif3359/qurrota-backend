@@ -71,8 +71,8 @@ const productSchema = new Schema(
 
     images: [imageSchema],
 
-    ratingAverage: { type: Number, min: 0, max: 5, default: 0 },
-    ratingCount: { type: Number, min: 0, default: 0 },
+    ratingAverage: { type: Number, min: 0, max: 5, default: 3 },
+    ratingCount: { type: Number, min: 0, default: 3 },
     reviews: [reviewSchema],
 
     weight: { type: Number, min: 0 },
