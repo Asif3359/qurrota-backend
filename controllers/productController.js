@@ -101,29 +101,60 @@ exports.getProducts = async (req, res) => {
     console.log('🔍 getProducts function called for /published route');
     console.log('📝 Query parameters:', req.query);
     
+    // Get pagination and sort params from query
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12;
+    const skip = (page - 1) * limit;
+    const sortParam = req.query.sort || 'newest';
+    
     const filter = { isPublished: true };
+    
+    // Determine sort order based on sortParam
+    let sortOrder = {};
+    switch (sortParam) {
+      case 'price-low':
+        sortOrder = { price: 1 }; // Ascending
+        break;
+      case 'price-high':
+        sortOrder = { price: -1 }; // Descending
+        break;
+      case 'name-asc':
+        sortOrder = { name: 1 }; // A-Z
+        break;
+      case 'name-desc':
+        sortOrder = { name: -1 }; // Z-A
+        break;
+      case 'newest':
+      default:
+        sortOrder = { createdAt: -1, updatedAt: -1 }; // Newest first
+        break;
+    }
+    
     console.log('🎯 Database filter:', filter);
+    console.log('📄 Pagination:', { page, limit, skip });
+    console.log('🔄 Sort order:', sortOrder);
 
-    // Check what's actually in the database
-    const totalPublished = await Product.countDocuments(filter);
-    console.log(`📊 Total published products in DB: ${totalPublished}`);
-
+    // Execute query with sorting BEFORE pagination
     const [products, total] = await Promise.all([
       Product.find(filter)
-        .sort({ updatedAt: -1 })
-        .limit(10)
+        .sort(sortOrder) // Sort happens BEFORE skip/limit
+        .skip(skip)
+        .limit(limit)
         .lean(),
       Product.countDocuments(filter)
     ]);
 
-    console.log(`✅ Found ${products.length} products`);
+    console.log(`✅ Found ${products.length} products out of ${total} total`);
 
-    // Always return success even if empty
+    // Return paginated response
     return res.status(200).json({
       success: true,
       data: products,
       count: products.length,
       total: total,
+      page: page,
+      totalPages: Math.ceil(total / limit),
+      sort: sortParam,
       message: products.length === 0 ? 'No published products found' : 'Products retrieved successfully'
     });
 
