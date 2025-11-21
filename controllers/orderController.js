@@ -1,16 +1,41 @@
 const Order = require("../models/Order");
 const Cart = require("../models/Cart");
 const Product = require("../models/Product");
+const crypto = require("crypto");
 
 /**
- * Create order from cart
+ * Helper function to get cart for authenticated or anonymous users
  */
+const getCartForOrder = async (req) => {
+  const isAuthenticated = req.isAuthenticated;
+  
+  if (isAuthenticated) {
+    return await Cart.findOne({ user: req.user.id, isActive: true })
+      .populate({
+        path: "items.product",
+        select: "name price images brand stock isActive isPublished",
+        match: { isActive: true, isPublished: true }
+      });
+  } else {
+    const sessionId = req.sessionId || req.headers['x-session-id'] || req.body.sessionId;
+    if (!sessionId) {
+      return null;
+    }
+    return await Cart.findOne({ sessionId: sessionId, isActive: true })
+      .populate({
+        path: "items.product",
+        select: "name price images brand stock isActive isPublished",
+        match: { isActive: true, isPublished: true }
+      });
+  }
+};
+
 /**
- * Create order from cart
+ * Create order from cart (authenticated or anonymous)
  */
 exports.createOrder = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const isAuthenticated = req.isAuthenticated;
     const { 
       paymentMethod, 
       shippingAddress, 
@@ -19,16 +44,20 @@ exports.createOrder = async (req, res) => {
       couponCode,
       discountAmount,
       shippingCost,
-      taxAmount
+      taxAmount,
+      sessionId: bodySessionId
     } = req.body;
 
-    // Get user's active cart
-    const cart = await Cart.findOne({ user: userId, isActive: true })
-      .populate({
-        path: "items.product",
-        select: "name price images brand stock isActive isPublished",
-        match: { isActive: true, isPublished: true }
+    // Validate shipping address is provided (required for orders)
+    if (!shippingAddress || !shippingAddress.name || !shippingAddress.email) {
+      return res.status(400).json({
+        success: false,
+        message: "Shipping address with name and email is required"
       });
+    }
+
+    // Get cart (authenticated or anonymous)
+    const cart = await getCartForOrder(req);
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({
@@ -59,9 +88,22 @@ exports.createOrder = async (req, res) => {
     // Generate order number manually to ensure it's set
     const orderNumber = Order.generateOrderNumber();
 
+    // Determine sessionId for anonymous users
+    let orderSessionId = null;
+    if (!isAuthenticated) {
+      orderSessionId = req.sessionId || req.headers['x-session-id'] || bodySessionId;
+      if (!orderSessionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Session ID is required for anonymous orders"
+        });
+      }
+    }
+
     const order = new Order({
-      user: userId,
-      orderNumber, // Explicitly set the order number
+      user: isAuthenticated ? req.user.id : null,
+      sessionId: orderSessionId,
+      orderNumber,
       items: orderItems,
       paymentMethod,
       shippingAddress,
@@ -75,7 +117,7 @@ exports.createOrder = async (req, res) => {
 
     await order.save();
 
-    // Clear user's cart after successful order creation
+    // Clear cart after successful order creation
     cart.isActive = false;
     await cart.save();
 
@@ -85,11 +127,18 @@ exports.createOrder = async (req, res) => {
       select: "name price images brand"
     });
 
-    res.status(201).json({
+    const response = {
       success: true,
       data: order,
       message: "Order created successfully"
-    });
+    };
+
+    // Include sessionId in response for anonymous users
+    if (!isAuthenticated && orderSessionId) {
+      response.sessionId = orderSessionId;
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     console.error("Error creating order:", error);
     res.status(500).json({
@@ -101,14 +150,28 @@ exports.createOrder = async (req, res) => {
 };
 
 /**
- * Get user's orders
+ * Get user's orders (authenticated or anonymous)
  */
 exports.getUserOrders = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const isAuthenticated = req.isAuthenticated;
     const { status, page = 1, limit = 10 } = req.query;
 
-    const query = { user: userId };
+    let query = {};
+    
+    if (isAuthenticated) {
+      query.user = req.user.id;
+    } else {
+      const sessionId = req.sessionId || req.headers['x-session-id'];
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Session ID is required for anonymous users"
+        });
+      }
+      query.sessionId = sessionId;
+    }
+
     if (status) {
       query.status = status;
     }
@@ -124,7 +187,7 @@ exports.getUserOrders = async (req, res) => {
 
     const total = await Order.countDocuments(query);
 
-    res.json({
+    const response = {
       success: true,
       data: {
         orders,
@@ -135,7 +198,14 @@ exports.getUserOrders = async (req, res) => {
         }
       },
       message: "Orders retrieved successfully"
-    });
+    };
+
+    // Include sessionId in response for anonymous users
+    if (!isAuthenticated && req.sessionId) {
+      response.sessionId = req.sessionId;
+    }
+
+    res.json(response);
   } catch (error) {
     console.error("Error getting user orders:", error);
     res.status(500).json({
@@ -147,14 +217,29 @@ exports.getUserOrders = async (req, res) => {
 };
 
 /**
- * Get single order by ID
+ * Get single order by ID (authenticated or anonymous)
  */
 exports.getOrderById = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const userId = req.user.id;
+    const isAuthenticated = req.isAuthenticated;
 
-    const order = await Order.findOne({ _id: orderId, user: userId })
+    let query = { _id: orderId };
+    
+    if (isAuthenticated) {
+      query.user = req.user.id;
+    } else {
+      const sessionId = req.sessionId || req.headers['x-session-id'];
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Session ID is required for anonymous users"
+        });
+      }
+      query.sessionId = sessionId;
+    }
+
+    const order = await Order.findOne(query)
       .populate({
         path: "items.product",
         select: "name price images brand description"
@@ -167,11 +252,18 @@ exports.getOrderById = async (req, res) => {
       });
     }
 
-    res.json({
+    const response = {
       success: true,
       data: order,
       message: "Order retrieved successfully"
-    });
+    };
+
+    // Include sessionId in response for anonymous users
+    if (!isAuthenticated && req.sessionId) {
+      response.sessionId = req.sessionId;
+    }
+
+    res.json(response);
   } catch (error) {
     console.error("Error getting order:", error);
     res.status(500).json({
@@ -292,15 +384,30 @@ exports.addTracking = async (req, res) => {
 };
 
 /**
- * Cancel order
+ * Cancel order (authenticated or anonymous)
  */
 exports.cancelOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { reason } = req.body;
-    const userId = req.user.id;
+    const isAuthenticated = req.isAuthenticated;
 
-    const order = await Order.findOne({ _id: orderId, user: userId });
+    let query = { _id: orderId };
+    
+    if (isAuthenticated) {
+      query.user = req.user.id;
+    } else {
+      const sessionId = req.sessionId || req.headers['x-session-id'];
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Session ID is required for anonymous users"
+        });
+      }
+      query.sessionId = sessionId;
+    }
+
+    const order = await Order.findOne(query);
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -318,11 +425,18 @@ exports.cancelOrder = async (req, res) => {
     const result = order.updateStatus('cancelled', reason);
     await order.save();
 
-    res.json({
+    const response = {
       success: true,
       data: order,
       message: "Order cancelled successfully"
-    });
+    };
+
+    // Include sessionId in response for anonymous users
+    if (!isAuthenticated && req.sessionId) {
+      response.sessionId = req.sessionId;
+    }
+
+    res.json(response);
   } catch (error) {
     console.error("Error cancelling order:", error);
     res.status(500).json({
@@ -334,14 +448,25 @@ exports.cancelOrder = async (req, res) => {
 };
 
 /**
- * Get order by order number
+ * Get order by order number (authenticated or anonymous)
+ * Note: For anonymous users, we allow lookup by order number only (no user/session validation)
+ * This allows customers to track orders using just the order number
  */
 exports.getOrderByNumber = async (req, res) => {
   try {
     const { orderNumber } = req.params;
-    const userId = req.user.id;
+    const isAuthenticated = req.isAuthenticated;
 
-    const order = await Order.findOne({ orderNumber, user: userId })
+    let query = { orderNumber };
+    
+    // For authenticated users, verify ownership
+    if (isAuthenticated) {
+      query.user = req.user.id;
+    }
+    // For anonymous users, allow lookup by order number only
+    // This is intentional - customers should be able to track orders with just order number
+
+    const order = await Order.findOne(query)
       .populate({
         path: "items.product",
         select: "name price images brand"
@@ -354,11 +479,18 @@ exports.getOrderByNumber = async (req, res) => {
       });
     }
 
-    res.json({
+    const response = {
       success: true,
       data: order,
       message: "Order retrieved successfully"
-    });
+    };
+
+    // Include sessionId in response for anonymous users
+    if (!isAuthenticated && req.sessionId) {
+      response.sessionId = req.sessionId;
+    }
+
+    res.json(response);
   } catch (error) {
     console.error("Error getting order by number:", error);
     res.status(500).json({
@@ -370,14 +502,29 @@ exports.getOrderByNumber = async (req, res) => {
 };
 
 /**
- * Get order summary/statistics
+ * Get order summary/statistics (authenticated or anonymous)
  */
 exports.getOrderSummary = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const isAuthenticated = req.isAuthenticated;
+
+    let matchQuery = {};
+    
+    if (isAuthenticated) {
+      matchQuery.user = req.user.id;
+    } else {
+      const sessionId = req.sessionId || req.headers['x-session-id'];
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Session ID is required for anonymous users"
+        });
+      }
+      matchQuery.sessionId = sessionId;
+    }
 
     const stats = await Order.aggregate([
-      { $match: { user: userId } },
+      { $match: matchQuery },
       {
         $group: {
           _id: null,
@@ -404,11 +551,18 @@ exports.getOrderSummary = async (req, res) => {
       cancelledOrders: 0
     };
 
-    res.json({
+    const response = {
       success: true,
       data: summary,
       message: "Order summary retrieved successfully"
-    });
+    };
+
+    // Include sessionId in response for anonymous users
+    if (!isAuthenticated && req.sessionId) {
+      response.sessionId = req.sessionId;
+    }
+
+    res.json(response);
   } catch (error) {
     console.error("Error getting order summary:", error);
     res.status(500).json({

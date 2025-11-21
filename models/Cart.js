@@ -41,8 +41,9 @@ const cartSchema = new Schema(
     user: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false, // Made optional for anonymous users
       index: true,
+      sparse: true,
     },
     items: [cartItemSchema],
     isActive: {
@@ -93,11 +94,11 @@ const cartSchema = new Schema(
   { timestamps: true }
 );
 
-// Ensure one active cart per user
-cartSchema.index({ user: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true } });
+// Ensure one active cart per user (for authenticated users)
+cartSchema.index({ user: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true, user: { $exists: true } } });
 
-// Index for session-based carts
-cartSchema.index({ sessionId: 1, isActive: 1 });
+// Ensure one active cart per session (for anonymous users)
+cartSchema.index({ sessionId: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true, sessionId: { $exists: true } } });
 
 // Index for product lookups
 cartSchema.index({ "items.product": 1 });
@@ -198,8 +199,12 @@ cartSchema.methods.getItem = function (productId, variantId = null) {
   );
 };
 
-// Pre-save middleware to clean up expired items
+// Pre-save middleware to validate cart has either user or sessionId
 cartSchema.pre("save", function (next) {
+  // Ensure cart has either user or sessionId
+  if (!this.user && !this.sessionId) {
+    return next(new Error("Cart must have either a user or sessionId"));
+  }
   // Remove items with invalid quantities
   this.items = this.items.filter(item => item.quantity > 0);
   next();

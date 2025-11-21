@@ -137,7 +137,7 @@ exports.getProducts = async (req, res) => {
     // Execute query with sorting BEFORE pagination
     const [products, total] = await Promise.all([
       Product.find(filter)
-        .sort(sortOrder) // Sort happens BEFORE skip/limit
+        .sort(sortOrder)
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -146,7 +146,6 @@ exports.getProducts = async (req, res) => {
 
     console.log(`✅ Found ${products.length} products out of ${total} total`);
 
-    // Return paginated response
     return res.status(200).json({
       success: true,
       data: products,

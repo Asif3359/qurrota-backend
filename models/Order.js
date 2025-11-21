@@ -37,7 +37,13 @@ const orderSchema = new Schema(
     user: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false, // Made optional for anonymous orders
+      index: true,
+      sparse: true,
+    },
+    sessionId: {
+      type: String,
+      sparse: true,
       index: true,
     },
     orderNumber: {
@@ -173,6 +179,9 @@ orderSchema.index({ orderNumber: 1 });
 // Index for user orders
 orderSchema.index({ user: 1, createdAt: -1 });
 
+// Index for session-based orders (anonymous users)
+orderSchema.index({ sessionId: 1, createdAt: -1 });
+
 // Index for status filtering
 orderSchema.index({ status: 1, createdAt: -1 });
 
@@ -268,8 +277,12 @@ orderSchema.pre('save', function (next) {
   next();
 });
 
-// Pre-save middleware to validate addresses
+// Pre-save middleware to validate order has either user or sessionId
 orderSchema.pre('save', function (next) {
+  // Ensure order has either user or sessionId
+  if (!this.user && !this.sessionId) {
+    return next(new Error("Order must have either a user or sessionId"));
+  }
   // If billing address is not provided, use shipping address
   if (!this.billingAddress || Object.keys(this.billingAddress).length === 0) {
     this.billingAddress = { ...this.shippingAddress };

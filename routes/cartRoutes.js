@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/authMiddleware');
+const optionalAuth = require('../middleware/optionalAuth');
 const {
   getCart,
   addToCart,
@@ -15,8 +15,8 @@ const {
   getCartSummary
 } = require('../controllers/cartController');
 
-// All cart routes require authentication
-router.use(authMiddleware);
+// All cart routes support both authenticated and anonymous users
+router.use(optionalAuth);
 
 // Get user's cart
 router.get('/', getCart);
