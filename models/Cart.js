@@ -95,10 +95,12 @@ const cartSchema = new Schema(
 );
 
 // Ensure one active cart per user (for authenticated users)
-cartSchema.index({ user: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true, user: { $exists: true } } });
+// Only apply unique constraint when user is an ObjectId (excludes null)
+cartSchema.index({ user: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true, user: { $type: "objectId" } } });
 
 // Ensure one active cart per session (for anonymous users)
-cartSchema.index({ sessionId: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true, sessionId: { $exists: true } } });
+// Only apply unique constraint when sessionId is a string (excludes null)
+cartSchema.index({ sessionId: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true, sessionId: { $type: "string" } } });
 
 // Index for product lookups
 cartSchema.index({ "items.product": 1 });

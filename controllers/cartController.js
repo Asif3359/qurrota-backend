@@ -4,36 +4,86 @@ const crypto = require("crypto");
 
 /**
  * Helper function to get or create cart for authenticated or anonymous users
+ * Uses atomic operations to prevent race conditions and duplicate key errors
  */
 const getOrCreateCart = async (req) => {
   const isAuthenticated = req.isAuthenticated;
   let cart;
 
-  if (isAuthenticated) {
-    // Authenticated user - use userId
-    const userId = req.user.id;
-    cart = await Cart.findOne({ user: userId, isActive: true });
-    if (!cart) {
-      cart = new Cart({ user: userId });
-      await cart.save();
-    }
-  } else {
-    // Anonymous user - use sessionId
-    let sessionId = req.sessionId || req.headers['x-session-id'] || req.body.sessionId;
-    
-    if (!sessionId) {
-      // Generate a new sessionId if not provided
-      sessionId = crypto.randomUUID();
-    }
+  try {
+    if (isAuthenticated) {
+      // Authenticated user - use userId
+      const userId = req.user.id;
+      
+      // Use findOneAndUpdate with upsert for atomic operation
+      cart = await Cart.findOneAndUpdate(
+        { user: userId, isActive: true },
+        { 
+          $setOnInsert: { 
+            user: userId, 
+            isActive: true,
+            items: [],
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          }
+        },
+        { 
+          upsert: true, 
+          new: true,
+          setDefaultsOnInsert: true
+        }
+      );
+    } else {
+      // Anonymous user - use sessionId
+      let sessionId = req.sessionId || req.headers['x-session-id'] || req.body.sessionId;
+      
+      if (!sessionId) {
+        // Generate a new sessionId if not provided
+        sessionId = crypto.randomUUID();
+      }
 
-    cart = await Cart.findOne({ sessionId: sessionId, isActive: true });
-    if (!cart) {
-      cart = new Cart({ sessionId: sessionId });
-      await cart.save();
+      // Use findOneAndUpdate with upsert for atomic operation
+      // This prevents race conditions where multiple requests try to create the same cart
+      cart = await Cart.findOneAndUpdate(
+        { sessionId: sessionId, isActive: true },
+        { 
+          $setOnInsert: { 
+            sessionId: sessionId, 
+            isActive: true,
+            items: [],
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          }
+        },
+        { 
+          upsert: true, 
+          new: true,
+          setDefaultsOnInsert: true
+        }
+      );
+      
+      // Set sessionId in response headers so client can store it
+      req.sessionId = sessionId;
     }
-    
-    // Set sessionId in response headers so client can store it
-    req.sessionId = sessionId;
+  } catch (error) {
+    // Handle duplicate key errors (race condition fallback)
+    if (error.code === 11000) {
+      console.warn('Duplicate key error detected, retrying with findOne:', error.message);
+      
+      // Retry by finding existing cart
+      if (isAuthenticated) {
+        cart = await Cart.findOne({ user: req.user.id, isActive: true });
+      } else {
+        const sessionId = req.sessionId || req.headers['x-session-id'] || req.body.sessionId;
+        cart = await Cart.findOne({ sessionId: sessionId, isActive: true });
+      }
+      
+      // If still no cart found, throw the original error
+      if (!cart) {
+        throw error;
+      }
+    } else {
+      // Re-throw non-duplicate key errors
+      throw error;
+    }
   }
 
   return cart;
