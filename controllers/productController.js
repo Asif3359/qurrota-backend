@@ -208,7 +208,67 @@ exports.getProductByIdOrSlug = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body || {};
+    const body = req.body || {};
+
+    // Parse JSON fields if sent as strings in multipart form
+    let variants = body.variants;
+    if (typeof variants === 'string') {
+      try { variants = JSON.parse(variants); } catch (_) { variants = undefined; }
+    }
+    let images = body.images;
+    if (typeof images === 'string') {
+      try { images = JSON.parse(images); } catch (_) { images = undefined; }
+    }
+
+    const updates = { ...body };
+    if (variants !== undefined) updates.variants = variants;
+    if (images !== undefined) updates.images = images;
+
+    // If new files are uploaded, upload them and merge/replace product.images
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      const existing = await Product.findById(id).select('images').lean();
+      if (!existing) return res.status(404).json({ message: "Product not found" });
+
+      const uploads = [];
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+        const uploadResult = await uploadImage(file.buffer, 'qurrota/products');
+        uploads.push(uploadResult);
+        if (i < req.files.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      const successfulUploads = uploads.filter((u) => u && u.success);
+      const failedUploads = uploads.filter((u) => !u || !u.success);
+      if (failedUploads.length > 0) {
+        return res.status(400).json({
+          message: `Failed to upload ${failedUploads.length} out of ${req.files.length} images`,
+          errors: failedUploads.map(u => u.error)
+        });
+      }
+
+      const uploadedImages = successfulUploads.map((u) => ({ url: u.url, publicId: u.publicId, isPrimary: false }));
+
+      // replaceImages=true will overwrite existing images, otherwise append
+      const replaceImages =
+        body.replaceImages === true ||
+        body.replaceImages === 'true' ||
+        body.replaceImages === 1 ||
+        body.replaceImages === '1';
+
+      const baseImages = Array.isArray(updates.images)
+        ? updates.images
+        : (replaceImages ? [] : (Array.isArray(existing.images) ? existing.images : []));
+
+      updates.images = [...uploadedImages, ...baseImages];
+
+      // Ensure exactly one primary image (first one)
+      if (Array.isArray(updates.images) && updates.images.length > 0) {
+        updates.images = updates.images.map((img, idx) => ({ ...img, isPrimary: idx === 0 }));
+      }
+    }
+
     const updated = await Product.findByIdAndUpdate(id, updates, {
       new: true,
       runValidators: true,

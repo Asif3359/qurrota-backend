@@ -42,7 +42,6 @@ const cartSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: false, // Made optional for anonymous users
-      index: true,
       sparse: true,
     },
     items: [cartItemSchema],

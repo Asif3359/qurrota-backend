@@ -38,7 +38,6 @@ const orderSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: false, // Made optional for anonymous orders
-      index: true,
       sparse: true,
     },
     sessionId: {
@@ -50,7 +49,6 @@ const orderSchema = new Schema(
       type: String,
       required: true,
       unique: true,
-      index: true,
     },
     items: [orderItemSchema],
     status: {
@@ -63,7 +61,6 @@ const orderSchema = new Schema(
       type: String,
       enum: ['pending', 'paid', 'failed', 'refunded'],
       default: 'pending',
-      index: true,
     },
     paymentMethod: {
       type: String,
@@ -172,9 +169,6 @@ const orderSchema = new Schema(
   },
   { timestamps: true }
 );
-
-// Index for order number
-orderSchema.index({ orderNumber: 1 });
 
 // Index for user orders
 orderSchema.index({ user: 1, createdAt: -1 });

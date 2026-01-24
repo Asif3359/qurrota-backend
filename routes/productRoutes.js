@@ -13,7 +13,7 @@ router.get('/:idOrSlug', getProductByIdOrSlug);
 
 // Admin-only
 router.post('/', authenticateToken, requireAdmin, uploadMultiple, handleUploadError, createProduct);
-router.put('/:id', authenticateToken, requireAdmin, updateProduct);
+router.put('/:id', authenticateToken, requireAdmin, uploadMultiple, handleUploadError, updateProduct);
 router.delete('/:id', authenticateToken, requireAdmin, deleteProduct);
 
 module.exports = router;
