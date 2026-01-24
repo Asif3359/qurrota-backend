@@ -20,6 +20,7 @@ var wishlistRouter = require('./routes/wishlistRoutes');
 var cartRouter = require('./routes/cartRoutes');
 var orderRouter = require('./routes/orderRoutes');
 var contactRouter = require('./routes/contactRoutes');
+var bannerRouter = require('./routes/bannerRoutes');
 
 var app = express();
 
@@ -71,6 +72,7 @@ app.use('/api/wishlist', wishlistRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/orders', orderRouter);
 app.use('/api/contact', contactRouter);
+app.use('/api/banners', bannerRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
