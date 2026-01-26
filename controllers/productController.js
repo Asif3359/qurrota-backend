@@ -294,3 +294,164 @@ exports.deleteProduct = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+// Search products (public route)
+exports.searchProducts = async (req, res) => {
+  try {
+    const {
+      q,                    // Search query (text search)
+      brand,                // Filter by brand
+      category,             // Filter by category
+      minPrice,             // Minimum price
+      maxPrice,             // Maximum price
+      tags,                 // Filter by tags (comma-separated)
+      inStock,              // Filter by stock availability (true/false)
+      page = 1,             // Page number
+      limit = 20,           // Items per page
+      sort = 'relevance'    // Sort: relevance, price-low, price-high, newest, name-asc, name-desc
+    } = req.query;
+
+    // Base filter - only published and active products
+    const filter = {
+      isPublished: true,
+      isActive: true
+    };
+
+    // Text search using MongoDB text index
+    if (q && q.trim()) {
+      filter.$text = { $search: q.trim() };
+    }
+
+    // Filter by brand
+    if (brand && brand.trim()) {
+      filter.brand = { $regex: brand.trim(), $options: 'i' };
+    }
+
+    // Filter by category
+    if (category && category.trim()) {
+      filter.categories = { $in: [category.trim()] };
+    }
+
+    // Filter by tags (comma-separated)
+    if (tags && tags.trim()) {
+      const tagArray = tags.split(',').map(tag => tag.trim()).filter(Boolean);
+      if (tagArray.length > 0) {
+        filter.tags = { $in: tagArray };
+      }
+    }
+
+    // Price range filter
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
+
+    // Stock availability filter
+    if (inStock === 'true' || inStock === true) {
+      filter.$or = [
+        { stock: { $gt: 0 } },
+        { 'variants.stock': { $gt: 0 } }
+      ];
+    }
+
+    // Pagination
+    const skip = (Number(page) - 1) * Number(limit);
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+
+    // Determine sort order
+    let sortOrder = {};
+    if (q && q.trim() && sort === 'relevance') {
+      // If there's a search query, sort by text score first, then by other criteria
+      sortOrder = { score: { $meta: 'textScore' }, createdAt: -1 };
+    } else {
+      switch (sort) {
+        case 'price-low':
+          sortOrder = { price: 1 };
+          break;
+        case 'price-high':
+          sortOrder = { price: -1 };
+          break;
+        case 'name-asc':
+          sortOrder = { name: 1 };
+          break;
+        case 'name-desc':
+          sortOrder = { name: -1 };
+          break;
+        case 'newest':
+          sortOrder = { createdAt: -1, updatedAt: -1 };
+          break;
+        case 'oldest':
+          sortOrder = { createdAt: 1 };
+          break;
+        case 'rating':
+          sortOrder = { ratingAverage: -1, ratingCount: -1 };
+          break;
+        default:
+          sortOrder = { createdAt: -1, updatedAt: -1 };
+      }
+    }
+
+    // Build query
+    let query = Product.find(filter);
+
+    // Add text score projection if doing text search
+    if (q && q.trim() && sort === 'relevance') {
+      query = query.select({ score: { $meta: 'textScore' } });
+    }
+
+    // Execute query with sorting and pagination
+    const [products, total] = await Promise.all([
+      query
+        .sort(sortOrder)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Product.countDocuments(filter)
+    ]);
+
+    // Get unique brands and categories for filters (optional - can be used for frontend filters)
+    const [brands, categories] = await Promise.all([
+      Product.distinct('brand', { isPublished: true, isActive: true, brand: { $exists: true, $ne: '' } }),
+      Product.distinct('categories', { isPublished: true, isActive: true, categories: { $exists: true, $ne: [] } })
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: products,
+      count: products.length,
+      total: total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+      sort: sort,
+      query: q || null,
+      filters: {
+        brand: brand || null,
+        category: category || null,
+        tags: tags ? tags.split(',').map(t => t.trim()) : null,
+        priceRange: {
+          min: minPrice ? Number(minPrice) : null,
+          max: maxPrice ? Number(maxPrice) : null
+        },
+        inStock: inStock === 'true' || inStock === true
+      },
+      availableFilters: {
+        brands: brands.filter(Boolean).sort(),
+        categories: categories.flat().filter(Boolean).sort()
+      },
+      message: products.length === 0 
+        ? 'No products found matching your search' 
+        : `${total} product(s) found`
+    });
+
+  } catch (error) {
+    console.error('❌ Error in searchProducts:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error searching products',
+      error: error.message
+    });
+  }
+};

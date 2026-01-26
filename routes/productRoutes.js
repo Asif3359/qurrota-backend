@@ -2,11 +2,12 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middleware/authenticateToken');
 const requireAdmin = require('../middleware/requireAdmin');
-const { createProduct, listProducts, getProductByIdOrSlug, updateProduct, deleteProduct, getProducts,debugProducts } = require('../controllers/productController');
+const { createProduct, listProducts, getProductByIdOrSlug, updateProduct, deleteProduct, getProducts, debugProducts, searchProducts } = require('../controllers/productController');
 const { uploadMultiple, handleUploadError } = require('../middleware/upload');
 
 // Public
 router.get('/', listProducts);
+router.get('/search', searchProducts);
 router.get('/published', getProducts);
 router.get('/:idOrSlug', getProductByIdOrSlug);
 
